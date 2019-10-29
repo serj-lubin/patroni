@@ -12,35 +12,7 @@ PATRONI_NAMESPACE=${PATRONI_NAMESPACE:-/service}
 readonly PATRONI_NAMESPACE=${PATRONI_NAMESPACE%/}
 readonly DOCKER_IP=$(hostname --ip-address)
 
-case "$1" in
-    haproxy)
-        haproxy -f /etc/haproxy/haproxy.cfg -p /var/run/haproxy.pid -D
-        CONFD="confd -prefix=$PATRONI_NAMESPACE/$PATRONI_SCOPE -interval=10 -backend"
-        if [ ! -z "$PATRONI_ZOOKEEPER_HOSTS" ]; then
-            while ! /usr/share/zookeeper/bin/zkCli.sh -server $PATRONI_ZOOKEEPER_HOSTS ls /; do
-                sleep 1
-            done
-            exec dumb-init $CONFD zookeeper -node $PATRONI_ZOOKEEPER_HOSTS
-        else
-            while ! etcdctl cluster-health 2> /dev/null; do
-                sleep 1
-            done
-            exec dumb-init $CONFD etcd -node $(echo $ETCDCTL_ENDPOINTS | sed 's/,/ -node /g')
-        fi
-        ;;
-    etcd)
-        exec "$@" -advertise-client-urls http://$DOCKER_IP:2379
-        ;;
-    zookeeper)
-        exec /usr/share/zookeeper/bin/zkServer.sh start-foreground
-        ;;
-esac
 
-## We start an etcd
-if [ -z "$PATRONI_ETCD_HOSTS" ] && [ -z "$PATRONI_ZOOKEEPER_HOSTS" ]; then
-    export PATRONI_ETCD_URL="http://127.0.0.1:2379"
-    etcd --data-dir /tmp/etcd.data -advertise-client-urls=$PATRONI_ETCD_URL -listen-client-urls=http://0.0.0.0:2379 > /var/log/etcd.log 2> /var/log/etcd.err &
-fi
 
 export PATRONI_SCOPE
 export PATRONI_NAMESPACE
