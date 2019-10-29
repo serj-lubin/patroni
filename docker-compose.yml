@@ -4,75 +4,126 @@ version: "3"
 
 networks:
     demo:
+     driver: overlay
+     driver_opts:
+       encrypted: "true"
+     internal: true
+
 
 services:
     patroni1:
         image: patroni
-        networks: [ demo ]
+        networks: 
+         - demo 
         env_file: docker/patroni.env
         hostname: patroni1
         container_name: demo-patroni1
         environment:
-            PATRONI_NAME: patroni1
+            - PATRONI_NAME=patroni1
+            - SERVICE_PORTS=4532
 
     patroni2:
         image: patroni
-        networks: [ demo ]
+        networks:
+         - demo
         env_file: docker/patroni.env
         hostname: patroni2
         container_name: demo-patroni2
         environment:
-            PATRONI_NAME: patroni2
+            - PATRONI_NAME=patroni2
+            - SERVICE_PORTS=5432
 
     patroni3:
         image: patroni
-        networks: [ demo ]
+        networks:
+         - demo
         env_file: docker/patroni.env
         hostname: patroni3
         container_name: demo-patroni3
         environment:
-            PATRONI_NAME: patroni3
+            - PATRONI_NAME=patroni3
+            - SERVICE_PORTS=5432
+    #####haproxy service from debug
+    haproxy-consul:
+        image: dockercloud/haproxy
+        depends_on:
+            - consul-agent1
+            - consul-agent2
+            - consul-agent3
+        environment:
+            - BALANCE=leastconn
+            - MODE=tcp  
+        volumes:
+              - /var/run/docker.sock:/var/run/docker.sock
+        ports:
+        - 8500:80
+        networks:
+        - demo
+        deploy:
+            replicas: 2
+            #haproxy-pg:
+            #image: dockercloud/haproxy
+            #depends_on:
+            #- patroni2
+            #- patroni1
+            #- patroni3
+            #environment:
+            #- BALANCE=leastconn
+            #- MODE=tcp
+            #volumes:
+            #- /var/run/docker.sock:/var/run/docker.sock
+            #ports:
+            # - 5432:80
+            #networks:
+            #- demo
+            #deploy:
+            #replicas: 2
+    
 
     haproxy:
         image: patroni
-        networks: [ demo ]
+        networks:
+                - demo                
         env_file: docker/patroni.env
         hostname: haproxy
+        environment:
+            - BALANCE=leastconn
+            - MODE=tcp
         container_name: demo-haproxy
         ports:
-            - "5000:5000"
-            - "5001:5001"
+         - "5432:5000"
+         - "5001:5001"
         command: haproxy
+     
     consul-server1: &consul-server
-    image: consul:latest
-    command: agent -server -bootstrap-expect 3 -data-dir /data/server1 -ui -datacenter stolon -client 0.0.0.0
-    volumes:
-      - /mnt/psql/consul:/data
-    networks:
-      - consul
+     image: consul:latest
+     command: agent -server -bootstrap-expect 3 -data-dir /data/server1 -ui -datacenter stolon -client 0.0.0.0
+     networks: 
+        - demo 
+     volumes:
+       - /mnt/psql/consul:/data
+    consul-agent1: &consul-agent
+     image: consul:latest
+     environment:
+        - SERVICE_PORTS=8500
+     command: agent -retry-join consul-server1    -data-dir /data/client1 -ui -datacenter stolon -client 0.0.0.0
+     networks:
+        - demo 
+     volumes:
+        - /mnt/psql/consul:/data
 
-  consul-agent1: &consul-agent
-    image: consul:latest
-    environment:
-     - SERVICE_PORTS=8500
-    command: agent -retry-join consul-server1    -data-dir /data/client1 -ui -datacenter stolon -client 0.0.0.0
-    volumes:
-      - /mnt/psql/consul:/data
-    networks:
-      - consul
+    consul-server2:
+     <<: *consul-server
+     command: agent -server -retry-join consul-server1  -data-dir /data/server2 -ui -datacenter stolon -client 0.0.0.0
 
-  consul-server2:
-    <<: *consul-server
-    command: agent -server -retry-join consul-server1  -data-dir /data/server2 -ui -datacenter stolon -client 0.0.0.0
+    consul-agent2:
+     <<: *consul-agent
+     command: agent -retry-join consul-server1 -retry-join consul-server2 -retry-join consul-server3 -data-dir /data/client2 -ui -datacenter stolon -client 0.0.0.0
+    consul-server3:
+     <<: *consul-server
+     command: agent -server -retry-join consul-server1 -retry-join consul-server2 -retry-join consul-server3 -data-dir /data/server3 -ui -datacenter stolon -client 0.0.0.0
 
-  consul-agent2:
-    <<: *consul-agent
-    command: agent -retry-join consul-server1 -retry-join consul-server2 -retry-join consul-server3 -data-dir /data/client2 -ui -datacenter stolon -client 0.0.0.0
-  consul-server3:
-    <<: *consul-server
-    command: agent -server -retry-join consul-server1 -retry-join consul-server2 -retry-join consul-server3 -data-dir /data/server3 -ui -datacenter stolon -client 0.0.0.0
-
-  consul-agent3:
-    <<: *consul-agent
-    command: agent -retry-join consul-server1 -retry-join consul-server2 -retry-join consul-server3 -data-dir /data/client3 -ui -datacenter stolon -client 0.0.0.0
+    consul-agent3:
+     <<: *consul-agent
+     command: agent -retry-join consul-server1 -retry-join consul-server2 -retry-join consul-server3 -data-dir /data/client3 -ui -datacenter stolon -client 0.0.0.0
     

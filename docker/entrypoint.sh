@@ -11,8 +11,24 @@ readonly PATRONI_SCOPE=${PATRONI_SCOPE:-batman}
 PATRONI_NAMESPACE=${PATRONI_NAMESPACE:-/service}
 readonly PATRONI_NAMESPACE=${PATRONI_NAMESPACE%/}
 readonly DOCKER_IP=$(hostname --ip-address)
-
-
+case "$1" in
+    haproxy)
+        haproxy -f /etc/haproxy/haproxy.cfg -p /var/run/haproxy.pid -D
+        CONFD="confd -prefix=$PATRONI_NAMESPACE/$PATRONI_SCOPE -interval=10 -backend"
+	    if [ ! -z "$PATRONI_ZOOKEEPER_HOSTS" ]; then
+            while ! /usr/share/zookeeper/bin/zkCli.sh -server $PATRONI_ZOOKEEPER_HOSTS ls /; do
+                sleep 1
+            done
+            exec dumb-init $CONFD zookeeper -node $PATRONI_ZOOKEEPER_HOSTS
+        else
+            
+                sleep 90
+            
+            exec dumb-init $CONFD consul -node $(echo http://haproxy-consul:80 | sed 's/,/ -node /g')
+        fi
+        ;;
+	
+esac
 
 export PATRONI_SCOPE
 export PATRONI_NAMESPACE

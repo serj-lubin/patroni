@@ -27,6 +27,7 @@ RUN set -ex \
                             python3-etcd python3-kazoo python3-pip busybox \
                             net-tools iputils-ping --fix-missing \
     && pip3 install dumb-init \
+&& pip3 install python-consul \
 \
     # Cleanup all locales but en_US.UTF-8
     && find /usr/share/i18n/charmaps/ -type f ! -name UTF-8.gz -delete \
