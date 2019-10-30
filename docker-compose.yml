@@ -20,7 +20,6 @@ services:
         container_name: demo-patroni1
         environment:
             - PATRONI_NAME=patroni1
-            - SERVICE_PORTS=4532
 
     patroni2:
         image: patroni
@@ -31,7 +30,6 @@ services:
         container_name: demo-patroni2
         environment:
             - PATRONI_NAME=patroni2
-            - SERVICE_PORTS=5432
 
     patroni3:
         image: patroni
@@ -42,7 +40,6 @@ services:
         container_name: demo-patroni3
         environment:
             - PATRONI_NAME=patroni3
-            - SERVICE_PORTS=5432
     #####haproxy service from debug
     haproxy-consul:
         image: dockercloud/haproxy
@@ -50,6 +47,9 @@ services:
             - consul-agent1
             - consul-agent2
             - consul-agent3
+            - consul-server1
+            - consul-server2
+            - consul-server3  
         environment:
             - BALANCE=leastconn
             - MODE=tcp  
@@ -97,6 +97,8 @@ services:
      
     consul-server1: &consul-server
      image: consul:latest
+     environment:
+        - SERVICE_PORTS=8500
      command: agent -server -bootstrap-expect 3 -data-dir /data/server1 -ui -datacenter stolon -client 0.0.0.0
      networks: 
         - demo 
